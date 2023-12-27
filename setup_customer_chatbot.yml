@@ -1,0 +1,18 @@
+- name: Setup Customer Chatbot Environment
+  hosts: all
+  become: yes
+  vars_files:
+    - vars/main.yml
+  roles:
+    - setup_environment
+    - setup_git_repo
+    - setup_dir
+    - setup_conda
+    - creating_conda_env
+    - install_dependencies
+    - install_apache_bench
+    - setup_torchserve
+    - setup_datasets
+    - printing_cpu_and_pytorch_version
+
+

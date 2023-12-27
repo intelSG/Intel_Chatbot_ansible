@@ -1,0 +1,10 @@
+- name: Install Apache Bench dependencies in Conda environment
+  become: yes
+  pip:
+    requirements: "{{ workspace_path }}/src/concurrency_benchmarking/serve/benchmarks/requirements-ab.txt"
+    executable: "/opt/miniconda3/envs/customer_chatbot_intel/bin/pip"
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+
+  

@@ -1,0 +1,7 @@
+- name: Create Conda environment from intel_env.yml
+  become: yes
+  shell: conda env create -f {{ conda_env_file }}
+  environment:
+    PATH: "/opt/miniconda3/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+  ignore_errors: yes #need to ignore as environment create will not be created again

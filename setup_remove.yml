@@ -1,0 +1,32 @@
+- name: Uninstall Customer Chatbot Environment
+  hosts: all
+  become: yes
+  vars:
+    workspace_path: "/home/test/customer-chatbot"
+    conda_install_path: "/opt/miniconda3"
+    conda_env_name: "customer_chatbot_intel"
+
+  tasks:
+    - name: Deactivate Conda environment
+      shell: source {{ conda_install_path }}/bin/deactivate
+      ignore_errors: yes
+
+    - name: Remove Conda environment
+      shell: {{ conda_install_path }}/bin/conda env remove -n {{ conda_env_name }}
+      ignore_errors: yes
+
+    - name: Uninstall Conda
+      file:
+        path: "{{ conda_install_path }}"
+        state: absent
+
+    - name: Remove workspace directory
+      file:
+        path: "{{ workspace_path }}"
+        state: absent
+
+    - name: Revert changes to /etc/profile
+      lineinfile:
+        path: /etc/profile
+        state: absent
+        line: 'export PATH={{ conda_install_path }}/bin:$PATH'

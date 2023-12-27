@@ -1,0 +1,23 @@
+- name: Create atis-2 directory in DATA_DIR
+  become: yes
+  file:
+    path: "{{ DATA_DIR }}/atis-2"
+    state: directory
+
+- name: Download ATIS-2 data files
+  become: yes
+  get_url:
+    url: "{{ item.url }}"
+    dest:  "{{ DATA_DIR }}/atis-2/{{ item.dest }}"
+  loop:
+    - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/train', dest: 'train' }
+    - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/test', dest: 'test' }
+    - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/valid', dest: 'valid' }
+    - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/vocab.intent', dest: 'vocab.intent' }
+    - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/vocab.slot', dest: 'vocab.slot' }
+
+- name: Combine train and valid files into train_all
+  become: yes
+  shell: cat train valid > train_all
+  args:
+    chdir: "{{ DATA_DIR }}/atis-2"

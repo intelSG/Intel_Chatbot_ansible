@@ -1,0 +1,7 @@
+workspace_path: "/home/test/customer-chatbot"
+data_dir: "{{ workspace_path }}/data"
+output_dir: "{{ workspace_path }}/output"
+config_dir: "{{ workspace_path }}/config"
+conda_installer_url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+git_repo_url: "https://github.com/oneapi-src/customer-chatbot.git"
+conda_env_file: "{{ workspace_path }}/env/intel_env.yml"

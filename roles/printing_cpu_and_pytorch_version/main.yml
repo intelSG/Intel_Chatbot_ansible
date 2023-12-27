@@ -1,0 +1,19 @@
+- name: Get CPU architecture information
+  shell: lscpu | grep 'am'
+  register: cpu_info
+
+- name: Print CPU architecture information
+  debug:
+    msg: "{{ cpu_info.stdout }}"
+
+- name: Check PyTorch and Intel Extension for PyTorch versions
+  become: yes
+  shell: |
+    /opt/miniconda3/bin/conda run -n customer_chatbot_intel python -c "import torch; import intel_extension_for_pytorch as ipex; print('PyTorch Version:', torch.__version__); print('Intel Extension for PyTorch Version:', ipex.__version__);"
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+  register: python_version 
+
+- name: Print Pytorch version and Intel Extension for PyTorch versions
+  debug:
+    msg: "{{ python_version.stdout }}"

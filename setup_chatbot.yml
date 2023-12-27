@@ -1,0 +1,244 @@
+---
+- name: Setup Customer Chatbot Environment
+  hosts: all
+  become: yes
+  vars:
+    workspace_path: "/home/test/customer-chatbot"  # Change this to the desired path
+    data_dir: "{{ workspace_path }}/data"
+    output_dir: "{{ workspace_path }}/output"
+    config_dir: "{{ workspace_path }}/config"
+    conda_installer_url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+    git_repo_url: "https://github.com/oneapi-src/customer-chatbot.git"
+    conda_env_file: "{{ workspace_path }}/env/intel_env.yml"
+
+  tasks:
+    - name: Set environment variables
+      set_fact:
+        WORKSPACE: "{{ workspace_path }}"
+        DATA_DIR: "{{ data_dir }}"
+        OUTPUT_DIR: "{{ output_dir }}"
+        CONFIG_DIR: "{{ config_dir }}"
+    
+    #Note to self: write the export shell function here if possible
+    - name: Execute a shell command using the environment variables
+      shell: echo "Workspace directory is $WORKSPACE"
+      environment:
+        WORKSPACE: "{{ WORKSPACE }}"
+        DATA_DIR: "{{ DATA_DIR }}"
+        OUTPUT_DIR: "{{ OUTPUT_DIR }}"
+        CONFIG_DIR: "{{ CONFIG_DIR }}"
+
+    - name: Install git
+      apt:
+        name: git
+        state: present
+      register: git_installed
+
+    - name: Find git executable
+      command: which git
+      register: git_path
+      when: git_installed is changed
+
+    - name: Create workspace directory
+      file:
+        path: "{{ workspace_path }}"
+        state: directory
+
+    - name: Clone Git repository
+      command: "{{ git_path.stdout | default('/usr/bin/git') }} clone {{ git_repo_url }} {{ workspace_path }}"
+      args:
+        creates: "{{ workspace_path }}/.git"
+      environment:
+        PATH: "{{ ansible_env.PATH }}"
+
+    - name: Create required directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ output_dir }}/saved_models/"
+        - "{{ data_dir }}/atis-2/"
+        - "{{ output_dir }}/logs"
+
+    # Additional tasks for setting up Conda, creating environments, and running scripts should be added here.
+    # Some steps might require manual intervention or a different automation approach.
+    - name: Install Conda
+      block:
+        - name: Download Miniconda
+          get_url:
+            url: https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+            dest: /tmp/Miniconda3-latest-Linux-x86_64.sh
+            mode: 0550
+
+        - name: Create conda folder
+          become: True
+          file:
+            path: /opt/miniconda3
+            state: directory
+            mode: 755
+            recurse: yes
+
+        - name: Run the Miniconda installer
+          shell: /tmp/Miniconda3-latest-Linux-x86_64.sh -b -u -p /opt/miniconda3
+
+        - name: Remove the Miniconda installer
+          file:
+            state: absent
+            path: /tmp/Miniconda3-latest-Linux-x86_64.sh
+
+        # - name: Add Miniconda bin to path
+        #   become: True
+        #   lineinfile:
+        #     path: /etc/profile
+        #     line: 'export PATH=/opt/miniconda3/bin:$PATH && conda init'
+        #     create: yes
+        - name: Add path and initialize conda
+          shell: "export PATH=/opt/miniconda3/bin:$PATH; conda init"
+          args:
+            executable: /bin/bash
+            
+        - name: Conda - read permission for all
+          become: True
+          file:
+            path: /opt/miniconda3
+            mode: a+r
+            recurse: yes
+
+        - name: Conda - execution permission for all
+          become: True
+          file:
+            path: /opt/miniconda3/bin
+            mode: a+x
+            recurse: yes
+
+      #Task will take approximately 15 mins to complete setting up the environment
+    - name: Create Conda environment from intel_env.yml
+      become: yes
+      shell: conda env create -f {{ conda_env_file }}
+      environment:
+        PATH: "/opt/miniconda3/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+      #Once the conda environment is created on the local machine, creating it again will have an error
+      ignore_errors: yes
+
+    - name: Install Apache2 Utils and Git
+      become: yes
+      apt:
+        name:
+          - apache2-utils
+          - git
+        state: present
+
+    - name: Find Python executable in Conda environment
+      become: yes
+      shell: /opt/miniconda3/bin/conda run -n customer_chatbot_intel which python
+      register: conda_python_executable
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+
+    - name: Install pip in Conda environment
+      become: yes
+      shell: /opt/miniconda3/bin/conda run -n customer_chatbot_intel python -m ensurepip
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+
+    - name: Install additional Python packages in Conda environment
+      become: yes
+      shell: /opt/miniconda3/envs/customer_chatbot_intel/bin/pip install torch-model-archiver captum
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+
+    - name: Clone TorchServe repository
+      become: yes
+      git:
+        repo: 'https://github.com/pytorch/serve.git'
+        dest: "{{ workspace_path }}/src/concurrency_benchmarking/serve"
+        version: 'v0.8.2'
+        clone: yes
+        update: yes
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+      #If you have a local copy of the repo, an error will occur if you clone it again
+      ignore_errors: yes
+      
+    - name: Install TorchServe dependencies
+      become: yes
+      shell: |
+        source /opt/miniconda3/bin/activate customer_chatbot_intel
+        python ./ts_scripts/install_dependencies.py
+      args:
+        chdir: "{{ workspace_path }}/src/concurrency_benchmarking/serve"
+        executable: /bin/bash
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+
+    - name: Install TorchServe and related packages in Conda environment
+      become: yes
+      pip:
+        name:
+          - torchserve
+          - torch-model-archiver
+          - torch-workflow-archiver
+          - click-config-file
+        executable: "/opt/miniconda3/envs/customer_chatbot_intel/bin/pip"
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+
+    - name: Install Apache Bench dependencies in Conda environment
+      become: yes
+      pip:
+        requirements: "{{ workspace_path }}/src/concurrency_benchmarking/serve/benchmarks/requirements-ab.txt"
+        executable: "/opt/miniconda3/envs/customer_chatbot_intel/bin/pip"
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+      
+    - name: Create atis-2 directory in DATA_DIR
+      become: yes
+      file:
+        path: "{{ DATA_DIR }}/atis-2"
+        state: directory
+
+    - name: Download ATIS-2 data files
+      become: yes
+      get_url:
+        url: "{{ item.url }}"
+        dest:  "{{ DATA_DIR }}/atis-2/{{ item.dest }}"
+      loop:
+        - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/train', dest: 'train' }
+        - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/test', dest: 'test' }
+        - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/valid', dest: 'valid' }
+        - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/vocab.intent', dest: 'vocab.intent' }
+        - { url: 'https://raw.githubusercontent.com/sz128/slot_filling_and_intent_detection_of_SLU/master/data/atis-2/vocab.slot', dest: 'vocab.slot' }
+
+    - name: Combine train and valid files into train_all
+      become: yes
+      shell: cat train valid > train_all
+      args:
+        chdir: "{{ DATA_DIR }}/atis-2"
+    
+    - name: Get CPU architecture information
+      shell: lscpu | grep 'am'
+      register: cpu_info
+
+    - name: Print CPU architecture information
+      debug:
+        msg: "{{ cpu_info.stdout }}"
+
+    - name: Check PyTorch and Intel Extension for PyTorch versions
+      become: yes
+      shell: |
+        /opt/miniconda3/bin/conda run -n customer_chatbot_intel python -c "import torch; import intel_extension_for_pytorch as ipex; print('PyTorch Version:', torch.__version__); print('Intel Extension for PyTorch Version:', ipex.__version__);"
+      environment:
+        PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+      register: python_version 
+    
+    - name: Print Pytorch version and Intel Extension for PyTorch versions
+      debug:
+        msg: "{{ python_version.stdout }}"

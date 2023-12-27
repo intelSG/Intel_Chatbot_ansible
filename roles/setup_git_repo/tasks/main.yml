@@ -1,0 +1,22 @@
+- name: Install git
+  apt:
+    name: git
+    state: present
+  register: git_installed
+
+- name: Find git executable
+  command: which git
+  register: git_path
+  when: git_installed is changed
+
+- name: Create workspace directory
+  file:
+    path: "{{ workspace_path }}"
+    state: directory
+
+- name: Clone Git repository
+  command: "{{ git_path.stdout | default('/usr/bin/git') }} clone {{ git_repo_url }} {{ workspace_path }}"
+  args:
+    creates: "{{ workspace_path }}/.git"
+  environment:
+    PATH: "{{ ansible_env.PATH }}"

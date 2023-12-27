@@ -1,0 +1,40 @@
+- name: Clone TorchServe repository
+  become: yes
+  git:
+    repo: 'https://github.com/pytorch/serve.git'
+    dest: "{{ workspace_path }}/src/concurrency_benchmarking/serve"
+    version: 'v0.8.2'
+    clone: yes
+    update: yes
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+  ignore_errors: yes
+    
+  
+- name: Install TorchServe dependencies
+  become: yes
+  shell: |
+    source /opt/miniconda3/bin/activate customer_chatbot_intel
+    python ./ts_scripts/install_dependencies.py
+  args:
+    chdir: "{{ workspace_path }}/src/concurrency_benchmarking/serve"
+    executable: /bin/bash
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+  ignore_errors: yes
+
+- name: Install TorchServe and related packages in Conda environment
+  become: yes
+  pip:
+    name:
+      - torchserve
+      - torch-model-archiver
+      - torch-workflow-archiver
+      - click-config-file
+    executable: "/opt/miniconda3/envs/customer_chatbot_intel/bin/pip"
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+  ignore_errors: yes

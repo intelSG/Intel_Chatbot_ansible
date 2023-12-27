@@ -1,0 +1,122 @@
+---
+- name: Setup Customer Chatbot Environment
+  hosts: all
+  become: yes
+  vars:
+    workspace_path: "/home/test/customer-chatbot"  # Change this to the desired path
+    data_dir: "{{ workspace_path }}/data"
+    output_dir: "{{ workspace_path }}/output"
+    config_dir: "{{ workspace_path }}/config"
+    conda_installer_url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+    git_repo_url: "https://github.com/oneapi-src/customer-chatbot.git"
+    conda_env_file: "{{ workspace_path }}/env/intel_env.yml"
+
+  tasks:
+    - name: Set environment variables
+      set_fact:
+        WORKSPACE: "{{ workspace_path }}"
+        DATA_DIR: "{{ data_dir }}"
+        OUTPUT_DIR: "{{ output_dir }}"
+        CONFIG_DIR: "{{ config_dir }}"
+
+    - name: Install git
+      apt:
+        name: git
+        state: present
+      register: git_installed
+
+    - name: Find git executable
+      command: which git
+      register: git_path
+      when: git_installed is changed
+
+    - name: Create workspace directory
+      file:
+        path: "{{ workspace_path }}"
+        state: directory
+
+    - name: Clone Git repository
+      command: "{{ git_path.stdout | default('/usr/bin/git') }} clone {{ git_repo_url }} {{ workspace_path }}"
+      args:
+        creates: "{{ workspace_path }}/.git"
+      environment:
+        PATH: "{{ ansible_env.PATH }}"
+      # when: git_path.stat.exists or git_installed is changed
+      # environment:
+      #   PATH: "{{ ansible_env.PATH }}:/path/to/git"
+
+    - name: Create required directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ output_dir }}/saved_models/"
+        - "{{ data_dir }}/atis-2/"
+        - "{{ output_dir }}/logs"
+
+    # Additional tasks for setting up Conda, creating environments, and running scripts should be added here.
+    # Some steps might require manual intervention or a different automation approach.
+    - name: Install Conda
+      block:
+        - name: Download Miniconda
+          get_url:
+            url: https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+            dest: /tmp/Miniconda3-latest-Linux-x86_64.sh
+            mode: 0550
+
+        - name: Create conda folder
+          become: True
+          file:
+            path: /opt/miniconda3
+            state: directory
+            mode: 755
+            recurse: yes
+
+        - name: Run the Miniconda installer
+          shell: /tmp/Miniconda3-latest-Linux-x86_64.sh -b -u -p /opt/miniconda3
+
+        - name: Remove the Miniconda installer
+          file:
+            state: absent
+            path: /tmp/Miniconda3-latest-Linux-x86_64.sh
+
+        - name: Add Miniconda bin to path
+          become: True
+          lineinfile:
+            path: /etc/profile
+            line: 'export PATH=/opt/miniconda3/bin:$PATH'
+            create: yes
+
+        - name: Conda - read permission for all
+          become: True
+          file:
+            path: /opt/miniconda3
+            mode: +r
+            recurse: yes
+
+        - name: Conda - execution permission for all
+          become: True
+          file:
+            path: /opt/miniconda3/bin
+            mode: +x
+            recurse: yes
+
+    - name: Create Conda environment from intel_env.yml
+      become: yes
+      shell: conda env create -f {{ conda_env_file }}
+      environment:
+        PATH: "/opt/miniconda3/bin:{{ ansible_env.PATH }}"
+        WORKSPACE: "{{ workspace_path }}"
+      ignore_errors: yes
+
+#Active Conda Environment
+    # - name: Activate Conda environment
+    #   shell: echo "source /opt/miniconda3/bin/activate customer_chatbot_intel && python -c 'import sys; print(sys.executable)'" 
+    #   args:
+    #     executable: /bin/bash
+    #   register: python_executable
+
+    - name: Initialize Conda for all users
+      become: yes
+      shell: /opt/miniconda3/bin/conda init
+      ignore_errors: yes

@@ -1,0 +1,15 @@
+- name: Set environment variables
+  set_fact:
+    WORKSPACE: "{{ workspace_path }}"
+    DATA_DIR: "{{ data_dir }}"
+    OUTPUT_DIR: "{{ output_dir }}"
+    CONFIG_DIR: "{{ config_dir }}"
+
+#need to change here later
+- name: Execute a shell command using the environment variables
+  shell: echo "Workspace directory is $WORKSPACE"
+  environment:
+    WORKSPACE: "{{ WORKSPACE }}"
+    DATA_DIR: "{{ DATA_DIR }}"
+    OUTPUT_DIR: "{{ OUTPUT_DIR }}"
+    CONFIG_DIR: "{{ CONFIG_DIR }}"

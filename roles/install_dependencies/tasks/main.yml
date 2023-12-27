@@ -1,0 +1,29 @@
+- name: Install Apache2 Utils and Git
+  become: yes
+  apt:
+    name:
+      - apache2-utils
+      - git
+    state: present
+
+- name: Find Python executable in Conda environment
+  become: yes
+  shell: /opt/miniconda3/bin/conda run -n customer_chatbot_intel which python
+  register: conda_python_executable
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+
+- name: Install pip in Conda environment
+  become: yes
+  shell: /opt/miniconda3/bin/conda run -n customer_chatbot_intel python -m ensurepip
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
+
+- name: Install additional Python packages in Conda environment
+  become: yes
+  shell: /opt/miniconda3/envs/customer_chatbot_intel/bin/pip install torch-model-archiver captum
+  environment:
+    PATH: "/opt/miniconda3/envs/customer_chatbot_intel/bin:{{ ansible_env.PATH }}"
+    WORKSPACE: "{{ workspace_path }}"
